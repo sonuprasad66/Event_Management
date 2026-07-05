@@ -1,0 +1,113 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String    @id @default(uuid())
+  username     String    @unique
+  email        String    @unique
+  passwordHash String    @map("password_hash")
+  role         Role      @default(USER)
+  timezone     String    @default("Asia/Kolkata")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+
+  sessions        Session[]
+  events          Event[]
+  deletedEvents   Event[]   @relation("DeletedBy")
+  categories      Category[]
+
+  @@map("users")
+}
+
+model Session {
+  id            String    @id @default(uuid())
+  userId        String    @map("user_id")
+  tokenId       String    @unique @map("token_id")
+  socketId      String?   @map("socket_id")
+  browser       String
+  device        String
+  ipAddress     String    @map("ip_address")
+  isActive      Boolean   @default(true) @map("is_active")
+  invalidatedAt DateTime? @map("invalidated_at")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId, isActive])
+  @@index([tokenId])
+  @@index([createdAt])
+  @@map("sessions")
+}
+
+model Category {
+  id          String    @id @default(uuid())
+  name        String
+  slug        String
+  parentId    String?   @map("parent_id")
+  createdById String    @map("created_by_id")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  parent      Category?  @relation("CategoryTree", fields: [parentId], references: [id])
+  children    Category[] @relation("CategoryTree")
+  createdBy   User       @relation(fields: [createdById], references: [id])
+  events      Event[]
+
+  @@unique([name, parentId])
+  @@index([parentId])
+  @@map("categories")
+}
+
+model Event {
+  id             String    @id @default(uuid())
+  title          String    @db.VarChar(150)
+  description    String    @db.Text
+  categoryId     String    @map("category_id")
+  createdById    String    @map("created_by_id")
+  publishAtUtc   DateTime  @map("publish_at_utc")
+  sourceTimezone String    @map("source_timezone")
+  deletedAt      DateTime? @map("deleted_at")
+  deletedById    String?   @map("deleted_by_id")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  category    Category    @relation(fields: [categoryId], references: [id])
+  createdBy   User        @relation(fields: [createdById], references: [id])
+  deletedBy   User?       @relation("DeletedBy", fields: [deletedById], references: [id])
+  media       EventMedia[]
+
+  @@index([publishAtUtc])
+  @@index([categoryId])
+  @@index([createdById])
+  @@index([deletedAt])
+  @@map("events")
+}
+
+model EventMedia {
+  id        String   @id @default(uuid())
+  eventId   String   @map("event_id")
+  url       String
+  publicId  String   @map("public_id")
+  fileName  String   @map("file_name")
+  mimeType  String   @map("mime_type")
+  size      Int
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@index([eventId])
+  @@map("event_media")
+}
+
+enum Role {
+  ADMIN
+  USER
+}
